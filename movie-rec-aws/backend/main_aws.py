@@ -71,6 +71,7 @@ else:
 # =========================
 _s3 = None
 _cognito = None
+_dynamodb = None  # ADD THIS LINE
 
 def get_s3():
     global _s3
@@ -83,6 +84,12 @@ def get_cognito():
     if _cognito is None:
         _cognito = boto3.client("cognito-idp", region_name=AWS_REGION)
     return _cognito
+
+def get_dynamodb():                                          # ADD THIS FUNCTION
+    global _dynamodb
+    if _dynamodb is None:
+        _dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+    return _dynamodb
 
 # =========================
 # FASTAPI APP
@@ -318,35 +325,64 @@ async def attach_tmdb_card_by_title(title: str) -> Optional[TMDBMovieCard]:
 # =========================
 # S3 WATCHLIST HELPERS
 # =========================
-def _watchlist_key(user_email: str) -> str:
-    safe = user_email.replace("@", "_at_").replace(".", "_")
-    return f"watchlists/{safe}.json"
+# def _watchlist_key(user_email: str) -> str:
+#     safe = user_email.replace("@", "_at_").replace(".", "_")
+#     return f"watchlists/{safe}.json"
 
-def _get_watchlist_from_s3(user_email: str) -> List[dict]:
-    if not ASSETS_BUCKET:
-        return []
-    try:
-        s3 = get_s3()
-        obj = s3.get_object(Bucket=ASSETS_BUCKET, Key=_watchlist_key(user_email))
-        return json.loads(obj["Body"].read().decode())
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "NoSuchKey":
-            return []
-        raise HTTPException(status_code=500, detail="S3 read error")
+# def _get_watchlist_from_s3(user_email: str) -> List[dict]:
+#     if not ASSETS_BUCKET:
+#         return []
+#     try:
+#         s3 = get_s3()
+#         obj = s3.get_object(Bucket=ASSETS_BUCKET, Key=_watchlist_key(user_email))
+#         return json.loads(obj["Body"].read().decode())
+#     except ClientError as e:
+#         if e.response["Error"]["Code"] == "NoSuchKey":
+#             return []
+#         raise HTTPException(status_code=500, detail="S3 read error")
 
-def _save_watchlist_to_s3(user_email: str, items: List[dict]) -> None:
-    if not ASSETS_BUCKET:
-        return
+# def _save_watchlist_to_s3(user_email: str, items: List[dict]) -> None:
+#     if not ASSETS_BUCKET:
+#         return
+#     try:
+#         s3 = get_s3()
+#         s3.put_object(
+#             Bucket=ASSETS_BUCKET,
+#             Key=_watchlist_key(user_email),
+#             Body=json.dumps(items, ensure_ascii=False),
+#             ContentType="application/json",
+#         )
+#     except ClientError as e:
+#         raise HTTPException(status_code=500, detail=f"S3 write error: {e}")
+
+# =========================
+# DYNAMODB WATCHLIST HELPERS
+# =========================
+WATCHLIST_TABLE = "movie-watchlist"
+
+def _get_watchlist_from_db(user_email: str) -> List[dict]:
     try:
-        s3 = get_s3()
-        s3.put_object(
-            Bucket=ASSETS_BUCKET,
-            Key=_watchlist_key(user_email),
-            Body=json.dumps(items, ensure_ascii=False),
-            ContentType="application/json",
+        table = get_dynamodb().Table(WATCHLIST_TABLE)
+        resp = table.query(
+            KeyConditionExpression=boto3.dynamodb.conditions.Key("user_id").eq(user_email)
         )
+        return resp.get("Items", [])
     except ClientError as e:
-        raise HTTPException(status_code=500, detail=f"S3 write error: {e}")
+        raise HTTPException(status_code=500, detail=f"DB read error: {e}")
+
+def _add_to_db(user_email: str, item_dict: dict) -> None:
+    try:
+        table = get_dynamodb().Table(WATCHLIST_TABLE)
+        table.put_item(Item={"user_id": user_email, "movie_id": str(item_dict["tmdb_id"]), **item_dict})
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"DB write error: {e}")
+
+def _remove_from_db(user_email: str, tmdb_id: int) -> None:
+    try:
+        table = get_dynamodb().Table(WATCHLIST_TABLE)
+        table.delete_item(Key={"user_id": user_email, "movie_id": str(tmdb_id)})
+    except ClientError as e:
+        raise HTTPException(status_code=500, detail=f"DB delete error: {e}")
 
 # =========================
 # STARTUP: LOAD PICKLES
@@ -439,35 +475,59 @@ async def me(user: dict = Depends(require_user)):
 
 # ---- WATCHLIST ROUTES (User-specific, stored in S3) ----
 
+# @app.get("/watchlist", response_model=List[WatchlistItem])
+# async def get_watchlist(user: dict = Depends(require_user)):
+#     """Get user's watchlist from S3."""
+#     items = _get_watchlist_from_s3(user["email"])
+#     return items
 @app.get("/watchlist", response_model=List[WatchlistItem])
 async def get_watchlist(user: dict = Depends(require_user)):
-    """Get user's watchlist from S3."""
-    items = _get_watchlist_from_s3(user["email"])
+    """Get user's watchlist from DynamoDB."""
+    items = _get_watchlist_from_db(user["email"])
     return items
 
+# @app.post("/watchlist", response_model=dict)
+# async def add_to_watchlist(item: WatchlistItem, user: dict = Depends(require_user)):
+#     """Add movie to watchlist (stored in S3)."""
+#     items = _get_watchlist_from_s3(user["email"])
+#     if any(i["tmdb_id"] == item.tmdb_id for i in items):
+#         return {"message": "Already in watchlist"}
+#     item_dict = item.dict()
+#     item_dict["added_at"] = datetime.utcnow().isoformat()
+#     items.append(item_dict)
+#     _save_watchlist_to_s3(user["email"], items)
+#     logger.info(f"User {user['email']} added movie {item.tmdb_id} to watchlist")
+#     return {"message": "Added to watchlist", "count": len(items)}
 @app.post("/watchlist", response_model=dict)
 async def add_to_watchlist(item: WatchlistItem, user: dict = Depends(require_user)):
-    """Add movie to watchlist (stored in S3)."""
-    items = _get_watchlist_from_s3(user["email"])
-    if any(i["tmdb_id"] == item.tmdb_id for i in items):
+    """Add movie to watchlist (stored in DynamoDB)."""
+    existing = _get_watchlist_from_db(user["email"])
+    if any(i["tmdb_id"] == item.tmdb_id for i in existing):
         return {"message": "Already in watchlist"}
     item_dict = item.dict()
     item_dict["added_at"] = datetime.utcnow().isoformat()
-    items.append(item_dict)
-    _save_watchlist_to_s3(user["email"], items)
+    _add_to_db(user["email"], item_dict)
     logger.info(f"User {user['email']} added movie {item.tmdb_id} to watchlist")
-    return {"message": "Added to watchlist", "count": len(items)}
+    return {"message": "Added to watchlist"}
 
+# @app.delete("/watchlist/{tmdb_id}", response_model=dict)
+# async def remove_from_watchlist(tmdb_id: int, user: dict = Depends(require_user)):
+#     """Remove movie from watchlist."""
+#     items = _get_watchlist_from_s3(user["email"])
+#     before = len(items)
+#     items = [i for i in items if i["tmdb_id"] != tmdb_id]
+#     if len(items) == before:
+#         raise HTTPException(status_code=404, detail="Movie not in watchlist")
+#     _save_watchlist_to_s3(user["email"], items)
+#     return {"message": "Removed from watchlist", "count": len(items)}
 @app.delete("/watchlist/{tmdb_id}", response_model=dict)
 async def remove_from_watchlist(tmdb_id: int, user: dict = Depends(require_user)):
     """Remove movie from watchlist."""
-    items = _get_watchlist_from_s3(user["email"])
-    before = len(items)
-    items = [i for i in items if i["tmdb_id"] != tmdb_id]
-    if len(items) == before:
+    existing = _get_watchlist_from_db(user["email"])
+    if not any(i["tmdb_id"] == tmdb_id for i in existing):
         raise HTTPException(status_code=404, detail="Movie not in watchlist")
-    _save_watchlist_to_s3(user["email"], items)
-    return {"message": "Removed from watchlist", "count": len(items)}
+    _remove_from_db(user["email"], tmdb_id)
+    return {"message": "Removed from watchlist"}
 
 # ---- S3 PRE-SIGNED URL (for file upload) ----
 

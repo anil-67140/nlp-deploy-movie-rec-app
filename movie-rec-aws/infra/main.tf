@@ -319,7 +319,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
       {
         # S3 access - assets bucket only (least privilege)
         Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:GeneratePresignedUrl"]
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
         Resource = "${aws_s3_bucket.assets.arn}/*"
       },
       {
@@ -344,7 +344,19 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Effect   = "Allow"
         Action   = ["ssm:GetParameter", "ssm:GetParameters"]
         Resource = "arn:aws:ssm:${var.aws_region}:*:parameter/${var.project_name}/*"
-      }
+      },
+      {
+        # DynamoDB - watchlist table only (least privilege)
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = aws_dynamodb_table.watchlist.arn
+      },
     ]
   })
 }
@@ -357,6 +369,9 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 resource "aws_instance" "backend" {
   ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = "t3.micro"   # Free tier eligible (750 hrs/month)
+  credit_specification {
+    cpu_credits = "standard"            # ADD THIS - prevents Unlimited mode charges
+  }
   key_name               = aws_key_pair.deployer.key_name
   subnet_id              = aws_subnet.public_a.id
   vpc_security_group_ids = [aws_security_group.ec2_backend.id]
@@ -506,4 +521,26 @@ resource "aws_ssm_parameter" "assets_bucket" {
 # =============================================
 resource "random_id" "suffix" {
   byte_length = 4
+}
+
+
+# =============================================
+# DYNAMODB - Watchlist (always free tier)
+# =============================================
+resource "aws_dynamodb_table" "watchlist" {
+  name         = "movie-watchlist"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+  range_key    = "movie_id"
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+  attribute {
+    name = "movie_id"
+    type = "S"
+  }
+
+  tags = { Name = "${var.project_name}-watchlist" }
 }
