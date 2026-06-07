@@ -1,0 +1,17 @@
+# Copy this to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to git (it's in .gitignore)
+
+aws_region     = "us-east-1"
+project_name   = "movie-rec"
+
+# Run: cat ~/.ssh/id_rsa.pub
+ec2_public_key = "ssh-rsa AAAA... your-key-here"
+
+# Get your IP: curl https://checkip.amazonaws.com
+my_ip_cidr     = "YOUR_IP/32"
+
+# From themoviedb.org -> Settings -> API
+tmdb_api_key   = "your_tmdb_api_key_here"
+
+# Email for billing/alarm alerts
+alert_email    = "your@email.com"

@@ -1,0 +1,22 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfvars        # NEVER commit - has secrets!
+*.tfplan
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+venv/
+# *.pkl               # large ML files
+
+
+.env
+.venv
+# AWS
+*.pem
