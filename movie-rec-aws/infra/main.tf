@@ -213,12 +213,12 @@ resource "aws_s3_bucket_versioning" "assets" {
   bucket = aws_s3_bucket.assets.id
   versioning_configuration { status = "Enabled" }
 }
-
 resource "aws_s3_bucket_lifecycle_configuration" "assets" {
   bucket = aws_s3_bucket.assets.id
   rule {
     id     = "cleanup-old-versions"
     status = "Enabled"
+    filter {}
     noncurrent_version_expiration { noncurrent_days = 30 }
   }
 }
@@ -381,7 +381,7 @@ resource "aws_instance" "backend" {
   # 750 hrs/month = ~31 days continuous, so you're safe if running 1 instance
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 20   # 30 GB free, we use 20 to be safe
+    volume_size           = 30   # 30 GB free, we use 20 to be safe
     delete_on_termination = true
     encrypted             = true
   }
