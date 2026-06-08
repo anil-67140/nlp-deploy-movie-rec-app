@@ -49,18 +49,22 @@ rm -rf /tmp/repo
 # =============================================
 # 4. Install Python dependencies
 # =============================================
-pip3 install --upgrade pip
-pip3 install -r requirements.txt
+# pip3 install --upgrade pip
+# pip3 install -r requirements.txt
 
-# Install additional prod dependencies
-pip3 install \
-  uvicorn[standard] \
-  gunicorn \
-  boto3 \
-  python-jose[cryptography] \
-  passlib[bcrypt] \
-  python-multipart \
-  watchtower    # CloudWatch log handler for Python
+# # Install additional prod dependencies
+# pip3 install \
+#   uvicorn[standard] \
+#   gunicorn \
+#   boto3 \
+#   python-jose[cryptography] \
+#   passlib[bcrypt] \
+#   python-multipart \
+#   watchtower    # CloudWatch log handler for Python
+
+pip3 install --upgrade pip
+pip3 install -r $APP_DIR/requirements.txt
+pip3 install gunicorn
 
 # =============================================
 # 5. Fetch secrets from SSM Parameter Store
