@@ -31,7 +31,20 @@ APP_DIR="/opt/movie-rec"
 mkdir -p $APP_DIR
 cd $APP_DIR
 
-git clone https://github.com/anil-67140/movie_rec_nlp.git .
+# git clone https://github.com/anil-67140/nlp-deploy-movie-rec-app.git .
+git clone https://github.com/anil-67140/nlp-deploy-movie-rec-app.git /tmp/repo
+
+# Copy app files to correct location
+cp /tmp/repo/movie-rec-aws/backend/main.py $APP_DIR/main.py
+cp /tmp/repo/movie-rec-aws/backend/requirements.txt $APP_DIR/requirements.txt
+cp /tmp/repo/movie-rec-aws/frontend/app.py $APP_DIR/app.py
+cp /tmp/repo/df.pkl $APP_DIR/
+cp /tmp/repo/indices.pkl $APP_DIR/
+cp /tmp/repo/tfidf.pkl $APP_DIR/
+cp /tmp/repo/tfidf_matrix.pkl $APP_DIR/
+cp /tmp/repo/movies_metadata.csv $APP_DIR/
+
+rm -rf /tmp/repo
 
 # =============================================
 # 4. Install Python dependencies
@@ -184,7 +197,11 @@ EOF
 # =============================================
 # 9. CloudWatch Agent for log shipping
 # =============================================
-dnf install -y amazon-cloudwatch-agent
+# dnf install -y amazon-cloudwatch-agent
+# Fix python symlink temporarily for yum
+ln -sf /usr/bin/python3.9 /usr/bin/python3
+yum install -y amazon-cloudwatch-agent
+ln -sf /usr/bin/python3.11 /usr/bin/python3
 
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWEOF'
 {
