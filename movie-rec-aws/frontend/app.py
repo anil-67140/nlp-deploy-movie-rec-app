@@ -285,6 +285,15 @@ if st.session_state.view == "auth":
             email_r = st.text_input("Email", key="reg_email")
             pass_r  = st.text_input("Password (min 8 chars, include a number)", type="password", key="reg_pass")
             submitted_r = st.form_submit_button("Register")
+        # if submitted_r:
+        #     if not email_r or not pass_r:
+        #         st.error("Please fill in all fields.")
+        #     else:
+        #         data, err = api_post("/auth/register", {"email": email_r, "password": pass_r})
+        #         if err:
+        #             st.error(f"Registration failed: {err}")
+        #         else:
+        #             st.success("Registered! Check your email to verify, then log in.")
         if submitted_r:
             if not email_r or not pass_r:
                 st.error("Please fill in all fields.")
@@ -293,7 +302,29 @@ if st.session_state.view == "auth":
                 if err:
                     st.error(f"Registration failed: {err}")
                 else:
-                    st.success("Registered! Check your email to verify, then log in.")
+                    st.session_state["pending_verify_email"] = email_r
+                    st.success("✅ Registered! Check your email for a 6-digit verification code.")
+
+    # Verification code input (shows after registration)
+    if st.session_state.get("pending_verify_email"):
+        st.info(f"Enter the verification code sent to {st.session_state['pending_verify_email']}")
+        with st.form("verify_form"):
+            code = st.text_input("Verification Code (6 digits)")
+            verify_submitted = st.form_submit_button("Verify Email")
+        if verify_submitted:
+            if not code:
+                st.error("Please enter the verification code.")
+            else:
+                data, err = api_post("/auth/verify", {
+                    "email": st.session_state["pending_verify_email"],
+                    "code": code
+                })
+                if err:
+                    st.error(f"Verification failed: {err}")
+                else:
+                    st.success("✅ Email verified! You can now log in.")
+                    st.session_state["pending_verify_email"] = None
+                    st.rerun()
 
 # =====================================================
 # VIEW: WATCHLIST

@@ -468,6 +468,33 @@ async def login(req: UserLoginRequest):
             raise HTTPException(status_code=403, detail="Email not verified")
         raise HTTPException(status_code=400, detail=str(e))
 
+
+
+class VerifyRequest(BaseModel):
+    email: str
+    code: str
+
+@app.post("/auth/verify", response_model=dict)
+async def verify_email(req: VerifyRequest):
+    """Confirm Cognito email verification code."""
+    if not COGNITO_POOL or not COGNITO_CLIENT:
+        raise HTTPException(status_code=501, detail="Auth not configured")
+    try:
+        cog = get_cognito()
+        cog.confirm_sign_up(
+            ClientId=COGNITO_CLIENT,
+            Username=req.email,
+            ConfirmationCode=req.code,
+        )
+        logger.info(f"Email verified: {req.email}")
+        return {"message": "Email verified successfully"}
+    except ClientError as e:
+        code = e.response["Error"]["Code"]
+        if code == "CodeMismatchException":
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        if code == "ExpiredCodeException":
+            raise HTTPException(status_code=400, detail="Code expired — please register again")
+        raise HTTPException(status_code=400, detail=str(e))
 @app.get("/auth/me")
 async def me(user: dict = Depends(require_user)):
     """Get current authenticated user info."""
