@@ -544,3 +544,40 @@ resource "aws_dynamodb_table" "watchlist" {
 
   tags = { Name = "${var.project_name}-watchlist" }
 }
+
+# 
+# =============================================
+# tereraform   creates index.html for cloudfront
+# =============================================
+resource  "aws_s3_object" "frontend_index" {
+  bucket       = aws_s3_bucket.frontend.id
+  key          = "index.html"
+  content_type = "text/html"
+  content      = <<-EOF
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta http-equiv="refresh" content="0; url=http://${aws_eip.backend.public_ip}:8501">
+      <title>Movie Recommender</title>
+    </head>
+    <body>
+      <p>Redirecting... <a href="http://${aws_eip.backend.public_ip}:8501">Open App</a></p>
+    </body>
+    </html>
+  EOF
+
+  etag = md5("http://${aws_eip.backend.public_ip}:8501")
+}
+
+resource "null_resource" "invalidate_cf" {
+  triggers = {
+    ip = aws_eip.backend.public_ip
+  }
+
+  provisioner "local-exec" {
+    command     = "aws cloudfront create-invalidation --distribution-id ${aws_cloudfront_distribution.frontend.id} --paths \"/*\""
+    interpreter = ["PowerShell", "-Command"]
+  }
+
+  depends_on = [aws_s3_object.frontend_index]
+}

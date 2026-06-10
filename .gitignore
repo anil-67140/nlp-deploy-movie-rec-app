@@ -26,3 +26,6 @@ venv/
 .env
 .venv
 __pycache__
+
+#index.html
+index.html

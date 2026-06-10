@@ -20,3 +20,7 @@ venv/
 .venv
 # AWS
 *.pem
+
+#index.html
+index.html
+
